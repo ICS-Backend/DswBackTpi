@@ -45,7 +45,7 @@ jobs:
   deploy:
     name: Publicar imagen y desplegar en Azure Container Apps
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
