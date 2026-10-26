@@ -1,17 +1,17 @@
 ﻿
-using Dsw2025Tpi.Api.Middleware;                         
-using Dsw2025Tpi.Application.Interfaces;                 
-using Dsw2025Tpi.Application.Services;                  
-using Dsw2025Tpi.Data;                                   
-using Dsw2025Tpi.Data.Helpers;                          
-using Dsw2025Tpi.Data.Repositories;                      
-using Dsw2025Tpi.Domain.Interfaces;                      
-using Microsoft.AspNetCore.Authentication.JwtBearer;     
-using Microsoft.AspNetCore.Identity;                    
-using Microsoft.EntityFrameworkCore;                     
-using Microsoft.IdentityModel.Tokens;                   
-using Microsoft.OpenApi.Models;                          
-using System.Text;                                       
+using Dsw2025Tpi.Api.Middleware;
+using Dsw2025Tpi.Application.Interfaces;
+using Dsw2025Tpi.Application.Services;
+using Dsw2025Tpi.Data;
+using Dsw2025Tpi.Data.Helpers;
+using Dsw2025Tpi.Data.Repositories;
+using Dsw2025Tpi.Domain.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using System.Text;
 
 namespace Dsw2025Tpi.Api;
 
@@ -44,11 +44,11 @@ public class Program
 
             c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
-                Name = "Authorization",                   
-                Type = SecuritySchemeType.Http,           
-                Scheme = "bearer",                         
-                BearerFormat = "JWT",                      
-                In = ParameterLocation.Header,             
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
                 Description = "Ingrese el token:"
             });
 
@@ -63,33 +63,32 @@ public class Program
                             Id = "Bearer"
                         }
                     },
-                    Array.Empty<string>() 
+                                        Array.Empty<string>()
                 }
             });
         });
 
-
- 
         builder.Services.AddDbContext<Dsw2025TpiContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("MainDb")));
-
-        builder.Services.AddDbContext<AuthenticateContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("AuthDb")));
-
-
-
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("MainDb"),
+        sql => sql.EnableRetryOnFailure()
+    ));
+builder.Services.AddDbContext<AuthenticateContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("AuthDb"),
+        sql => sql.EnableRetryOnFailure()
+    ));
         builder.Services.AddIdentity<IdentityUser, IdentityRole>()
-            .AddEntityFrameworkStores<AuthenticateContext>() 
-            .AddDefaultTokenProviders();                     
-
+            .AddEntityFrameworkStores<AuthenticateContext>()
+            .AddDefaultTokenProviders();
         // i.d.
-        builder.Services.AddScoped<IAuthService, AuthService>();                     
-        builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();             
-        builder.Services.AddScoped<IProductsManagementService, ProductsManagementService>(); 
-        builder.Services.AddScoped<IRepository, EfRepository>();                    
-        builder.Services.AddScoped<IOrdersManagementService, OrdersManagementService>(); 
+        builder.Services.AddScoped<IAuthService, AuthService>();
+        builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+        builder.Services.AddScoped<IProductsManagementService, ProductsManagementService>();
+        builder.Services.AddScoped<IRepository, EfRepository>();
+        builder.Services.AddScoped<IOrdersManagementService, OrdersManagementService>();
 
-    
+
         var jwtSettings = builder.Configuration.GetSection("Jwt");
         var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new Exception("Missing JWT Key"));
 
@@ -102,24 +101,24 @@ public class Program
 
         .AddJwtBearer(options =>
         {
-            options.RequireHttpsMetadata = false; 
+            options.RequireHttpsMetadata = false;
             options.SaveToken = true;
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true,                       
-                ValidateAudience = true,                    
-                ValidateLifetime = true,                     
-                ValidateIssuerSigningKey = true,             
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
                 ValidIssuer = jwtSettings["Issuer"],
                 ValidAudience = jwtSettings["Audience"],
                 IssuerSigningKey = new SymmetricSecurityKey(key),
-                ClockSkew = TimeSpan.Zero                    
+                ClockSkew = TimeSpan.Zero
             };
         });
 
         builder.Services.AddTransient<GlobalExceptionMiddleware>();
 
-  
+
         var app = builder.Build();
 
       if (app.Configuration.GetValue<bool>(
@@ -127,15 +126,27 @@ public class Program
 {
         using (var scope = app.Services.CreateScope())
         {
-   
-            var db = scope.ServiceProvider.GetRequiredService<Dsw2025TpiContext>();
-            db.SeedDatabase(); 
+
+
+var db = scope.ServiceProvider
+    .GetRequiredService<Dsw2025TpiContext>();
+
+await db.Database.MigrateAsync();
+
+var authDb = scope.ServiceProvider
+    .GetRequiredService<AuthenticateContext>();
+
+await authDb.Database.MigrateAsync();
+
+// Inicializar datos una vez creadas las tablas
+db.SeedDatabase();
+
 
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             var config = builder.Configuration;
 
-    
+
             var roles = config.GetSection("Roles").Get<string[]>();
             if (roles != null)
             {
@@ -144,7 +155,7 @@ public class Program
                         await roleManager.CreateAsync(new IdentityRole(role));
             }
 
-   
+
             var adminConfig = config.GetSection("AdminUser");
             string adminEmail = adminConfig["Email"]!;
             string adminUsername = adminConfig["Username"]!;
@@ -174,10 +185,10 @@ public class Program
     app.UseSwaggerUI();
 }
 
- 
+
         app.UseMiddleware<GlobalExceptionMiddleware>();
 
-  
+
         if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
@@ -185,7 +196,7 @@ public class Program
         app.UseCors("AllowFrontend");
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapControllers();        
+        app.MapControllers();
         // Endpoint de prueba para verificar la API en Docker
 app.MapGet("/health", () =>
     Results.Ok(new
