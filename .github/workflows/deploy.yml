@@ -1,0 +1,86 @@
+name: CI/CD API Dsw2025Tpi
+
+on:
+  pull_request:
+    branches: [ development, main ]   # CI: valida cada PR antes del merge
+  push:
+    branches: [ development, main ]   # CI en ambas; deploy solo en main
+  workflow_dispatch:                  # permite correrlo a mano
+
+permissions:
+  contents: read
+  packages: write                     # para subir la imagen a GitHub Container Registry
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  AZ_RESOURCE_GROUP: rg-ics2026-tp3
+  AZ_CONTAINERAPP: dsw2025tpi-api
+  AZ_CONTAINER_NAME: simple-hello-world-container
+
+jobs:
+  build:
+    name: Restore, build, test e imagen Docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restaurar paquetes
+        run: dotnet restore Dsw2025Tpi.sln
+
+      - name: Compilación limpia
+        run: dotnet build Dsw2025Tpi.sln -c Release --no-restore
+
+      - name: Tests
+        run: dotnet test Dsw2025Tpi.sln -c Release --no-build
+
+      - name: Construir imagen Docker (validación)
+        run: docker build -t dsw2025tpi-api:${{ github.sha }} .
+
+  deploy:
+    name: Publicar imagen y desplegar en Azure Container Apps
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Nombre de la imagen (en minúsculas)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Login en GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build y push de la imagen
+        run: |
+          docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+
+      - name: Login en Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Desplegar nueva imagen en la Container App
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --name $AZ_CONTAINERAPP \
+            --resource-group $AZ_RESOURCE_GROUP \
+            --container-name $AZ_CONTAINER_NAME \
+            --image $IMAGE:${{ github.sha }}
+          az containerapp ingress update \
+            --name $AZ_CONTAINERAPP \
+            --resource-group $AZ_RESOURCE_GROUP \
+            --target-port 8080
