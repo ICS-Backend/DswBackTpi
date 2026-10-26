@@ -122,7 +122,9 @@ public class Program
   
         var app = builder.Build();
 
-      
+      if (app.Configuration.GetValue<bool>(
+    "Initialization:RunOnStartup", true))
+{
         using (var scope = app.Services.CreateScope())
         {
    
@@ -163,22 +165,35 @@ public class Program
                     await userManager.AddToRoleAsync(newAdmin, "Admin");
             }
         }
-
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseSwagger();
-            app.UseSwaggerUI();
         }
+
+      if (app.Environment.IsDevelopment() ||
+    app.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
  
         app.UseMiddleware<GlobalExceptionMiddleware>();
 
   
-        app.UseHttpsRedirection();
+        if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
         app.UseCors("AllowFrontend");
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapControllers();
+        app.MapControllers();        
+        // Endpoint de prueba para verificar la API en Docker
+app.MapGet("/health", () =>
+    Results.Ok(new
+    {
+        status = "OK",
+        message = "API funcionando correctamente en Docker"
+    }));
+
 
         await app.RunAsync();
     }
