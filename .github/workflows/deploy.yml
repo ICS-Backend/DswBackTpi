@@ -72,15 +72,6 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Configurar credenciales de GHCR en la Container App
-        run: |
-          az containerapp registry set \
-            --name $AZ_CONTAINERAPP \
-            --resource-group $AZ_RESOURCE_GROUP \
-            --server ghcr.io \
-            --username ${{ github.actor }} \
-            --password ${{ secrets.GITHUB_TOKEN }}
-
       - name: Desplegar nueva imagen en la Container App
         run: |
           az config set extension.use_dynamic_install=yes_without_prompt
