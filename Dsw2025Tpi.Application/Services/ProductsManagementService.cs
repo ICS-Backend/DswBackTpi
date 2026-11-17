@@ -178,20 +178,29 @@ namespace Dsw2025Tpi.Application.Services
 
           public async Task<ProductModel.ResponsePagination?> GetProducts(ProductModel.FilterProduct request)
           {
+              // Por defecto (sin Status) solo se incluyen los productos activos, como
+              // corresponde a un catálogo público. "all" trae activos e inactivos,
+              // "enabled"/"disabled" filtran explícitamente por un estado.
               bool? isActive = request.Status?.ToLower() switch
               {
                   "enabled" => true,
                   "disabled" => false,
-                  _ => null
+                  "all" => null,
+                  _ => true
               };
 
               _logger.LogInformation("Consulta de productos por admin");
 
-              // Obtener todos los productos
+              var search = request.Search?.ToLower();
+
+              // Obtener los productos que cumplen el filtro de estado y de búsqueda
+              // (la búsqueda matchea por nombre, SKU o código interno, sin distinguir mayúsculas)
               var productsDb = await _repository.GetFiltered<Product>(p =>
                   (isActive == null || p.IsActive == isActive) &&
-                  (string.IsNullOrEmpty(request.Search) ||
-                   p.Name.ToLower().Contains(request.Search.ToLower()))
+                  (string.IsNullOrEmpty(search) ||
+                   p.Name.ToLower().Contains(search) ||
+                   p.Sku.ToLower().Contains(search) ||
+                   p.InternalCode.ToLower().Contains(search))
               );
 
               if (productsDb == null || !productsDb.Any())
