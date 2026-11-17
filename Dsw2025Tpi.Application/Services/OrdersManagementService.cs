@@ -68,6 +68,11 @@ namespace Dsw2025Tpi.Application.Services
                 OrderItemValidator.Validate(item);
             }
 
+            var customer = await _repository.GetById<Customer>(request.CustomerId);
+
+            if (customer == null)
+                throw new CustomerNotFoundException($"Cliente con ID {request.CustomerId} no encontrado");
+
             var orderItems = new List<OrderItem>();
             decimal total = 0;
 
@@ -79,7 +84,7 @@ namespace Dsw2025Tpi.Application.Services
                     throw new EntityNotFoundException($"Producto con ID {item.ProductId} no encontrado");
 
                 if (product.StockQuantity < item.Quantity)
-                    throw new BadRequestException($"Stock insuficiente para el producto {product.Name}");
+                    throw new InsufficientStockException($"Stock insuficiente para el producto {product.Name}");
 
                 product.StockQuantity -= item.Quantity;
                 await _repository.Update(product);
@@ -108,8 +113,7 @@ namespace Dsw2025Tpi.Application.Services
 
             await _repository.Add(order);
 
-            // cargamos el Customer para que MapOrder tenga el nombre
-            var customer = await _repository.GetById<Customer>(order.CustomerId);
+            // ya tenemos el Customer validado arriba; lo asignamos para que MapOrder tenga el nombre
             order.Customer = customer;
 
             return MapOrder(order);
