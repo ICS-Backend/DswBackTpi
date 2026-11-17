@@ -28,8 +28,13 @@ namespace Dsw2025Tpi.Application.Services
 
         public async Task<ResponseProductModel> CreateAsync(RequestProductModel dto)
         {
+            // 1. Validar datos ANTES de consultar el repositorio
+            ProductValidator.ValidateCreate(dto);
 
-            ProductValidator.Validate(dto);
+            // 2. Regla de negocio: el SKU debe ser único
+            var existing = await _repository.First<Product>(p => p.Sku == dto.Sku);
+            if (existing != null)
+                throw new DuplicatedEntityException($"Ya existe un producto con el SKU {dto.Sku}.");
 
             var product = new Product
             {

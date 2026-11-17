@@ -1,15 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Dsw2025Tpi.Application.Dtos;
+﻿using Dsw2025Tpi.Application.Dtos;
 using Dsw2025Tpi.Application.Exceptions;
+using InvalidDataException = Dsw2025Tpi.Application.Exceptions.InvalidDataException;
 
 namespace Dsw2025Tpi.Application.Validation
 {
     public static class ProductValidator
     {
+        /// <summary>
+        /// Validación común para crear y modificar productos.
+        /// </summary>
         public static void Validate(ProductModel.RequestProductModel request)
         {
             if (string.IsNullOrWhiteSpace(request.Sku))
@@ -25,10 +24,22 @@ namespace Dsw2025Tpi.Application.Validation
                 throw new BadRequestException("La descripción es obligatoria.");
 
             if (request.CurrentUnitPrice <= 0)
-                throw new BadRequestException("El precio debe ser un valor positivo.");
+                throw new InvalidDataException("El precio debe ser un valor positivo.");
 
             if (request.StockQuantity < 0)
-                throw new BadRequestException("El stock debe ser un valor positivo.");
+                throw new InvalidDataException("El stock no puede ser negativo.");
+        }
+
+        /// <summary>
+        /// Validación para crear un producto: además de lo común, el stock inicial debe ser mayor a cero.
+        /// (Al modificar se sigue permitiendo stock 0, por ejemplo un producto agotado.)
+        /// </summary>
+        public static void ValidateCreate(ProductModel.RequestProductModel request)
+        {
+            Validate(request);
+
+            if (request.StockQuantity <= 0)
+                throw new InvalidDataException("El stock inicial debe ser mayor a cero.");
         }
     }
 }
