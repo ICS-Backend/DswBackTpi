@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ development, main ]   # CI: valida cada PR antes del merge
   push:
-    branches: [ development, main ]   # CI en ambas; deploy solo en main
+    branches: [ development, main ]   # CI en ambas; deploy solo fuera de las PR
   workflow_dispatch:                  # permite correrlo a mano
 
 permissions:
@@ -18,8 +18,12 @@ env:
   AZ_CONTAINER_NAME: simple-hello-world-container
 
 jobs:
-  build:
-    name: Restore, build, test e imagen Docker
+  # ---------------------------------------------------------------------------
+  # CI-02: los tests son una etapa propia y bloquean todo lo que sigue.
+  # Si una prueba falla, este job falla y GitHub no ejecuta build ni deploy.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests automatizados (unitarios + integracion)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,18 +37,50 @@ jobs:
       - name: Restaurar paquetes
         run: dotnet restore Dsw2025Tpi.sln
 
-      - name: Compilación limpia
+      - name: Compilacion limpia
         run: dotnet build Dsw2025Tpi.sln -c Release --no-restore
 
-      - name: Tests
-        run: dotnet test Dsw2025Tpi.sln -c Release --no-build
+      - name: Ejecutar la suite de pruebas
+        run: |
+          set -o pipefail
+          dotnet test Dsw2025Tpi.sln -c Release --no-build \
+            --logger "console;verbosity=normal" \
+            --logger "trx;LogFileName=resultados.trx" \
+            --results-directory ./TestResults | tee ./test-output.txt
 
-      - name: Construir imagen Docker (validación)
+      - name: Publicar resultados en el resumen del job
+        if: always()
+        run: |
+          {
+            echo "### Resultado de las pruebas"
+            echo ""
+            echo '```'
+            grep -E "Passed!|Failed!|error CS" ./test-output.txt || echo "sin resumen disponible"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar los resultados como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-de-pruebas
+          path: ./TestResults
+          if-no-files-found: ignore
+
+  build:
+    name: Imagen Docker (validacion)
+    needs: test                       # CI-02: sin tests en verde no se construye la imagen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Construir imagen Docker (validacion)
         run: docker build -t dsw2025tpi-api:${{ github.sha }} .
 
   deploy:
     name: Publicar imagen y desplegar en Azure Container Apps
-    needs: build
+    needs: build                      # y build depende de test: la cadena corta el deploy
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development')
     runs-on: ubuntu-latest
     steps:
